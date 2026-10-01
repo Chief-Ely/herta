@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../functions/search.dart';
 
 class SearchMusicScreen extends StatefulWidget {
   const SearchMusicScreen({super.key});
@@ -8,21 +9,25 @@ class SearchMusicScreen extends StatefulWidget {
 }
 
 class _SearchMusicScreenState extends State<SearchMusicScreen> {
-  int _currentIndex = 0;
   final TextEditingController _searchController = TextEditingController();
+  List<VideoSearchResult> _searchResults = [];
+  bool _isLoading = false;
+  int _currentIndex = 0;
 
-  // Mock search result items
-  final List<Map<String, String>> _searchResults = [
-    {'title': 'Title: Lorem Ipsum', 'duration': '3:30'},
-    {'title': 'Title: Lorem Ipsum', 'duration': '3:30'},
-    {'title': 'Title: Lorem Ipsum', 'duration': '3:30'},
-    {'title': 'Title: Lorem Ipsum', 'duration': '3:30'},
-  ];
+  void _performSearch() async {
+    final query = _searchController.text.trim();
+    if (query.isEmpty) return;
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
+    setState(() {
+      _isLoading = true;
+    });
+
+    final results = await searchYouTubeMusic(query);
+
+    setState(() {
+      _searchResults = results;
+      _isLoading = false;
+    });
   }
 
   void _onBottomNavTapped(int index) {
@@ -30,7 +35,6 @@ class _SearchMusicScreenState extends State<SearchMusicScreen> {
       _currentIndex = index;
     });
     if (index == 0) {
-      // Return to Home screen if home icon is clicked
       Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }
@@ -38,8 +42,6 @@ class _SearchMusicScreenState extends State<SearchMusicScreen> {
   @override
   Widget build(BuildContext context) {
     const primaryColor = Color(0xFF3F72AF);
-    final screenSize = MediaQuery.of(context).size;
-    final isWideScreen = screenSize.width > 600;
 
     return Scaffold(
       appBar: AppBar(
@@ -52,89 +54,64 @@ class _SearchMusicScreenState extends State<SearchMusicScreen> {
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 800),
+            constraints: const BoxConstraints(maxWidth: 600),
             child: Column(
               children: [
-                // Search Field Container
+                // Search Input Box
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                  padding: const EdgeInsets.all(16.0),
                   child: TextField(
                     controller: _searchController,
+                    onSubmitted: (_) => _performSearch(),
                     decoration: InputDecoration(
-                      hintText: 'Evanescence',
-                      hintStyle: TextStyle(color: Colors.grey.shade400),
-                      fillColor: Colors.white,
-                      filled: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 12,
-                      ),
+                      hintText: 'Search songs or artists...',
+                      prefixIcon: const Icon(Icons.search_rounded),
                       suffixIcon: IconButton(
-                        icon: const Icon(
-                          Icons.search_rounded,
-                          color: Colors.black54,
-                          size: 20,
-                        ),
-                        onPressed: () {
-                          // Perform search action
-                          FocusScope.of(context).unfocus();
-                        },
+                        icon: const Icon(Icons.arrow_forward_rounded),
+                        onPressed: _performSearch,
                       ),
+                      filled: true,
+                      fillColor: const Color(0xFFE2E7F0),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30),
-                        borderSide: const BorderSide(color: primaryColor),
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
                       ),
                     ),
                   ),
                 ),
 
-                // Responsive Search Results List / Grid
+                // Video Thumbnails Results
                 Expanded(
-                  child: isWideScreen
-                      ? GridView.builder(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            childAspectRatio: 1.3,
-                            crossAxisSpacing: 16,
-                            mainAxisSpacing: 16,
-                          ),
-                          itemCount: _searchResults.length,
-                          itemBuilder: (context, index) {
-                            return SearchResultCard(
-                              title: _searchResults[index]['title']!,
-                              duration: _searchResults[index]['duration']!,
-                            );
-                          },
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          itemCount: _searchResults.length,
-                          itemBuilder: (context, index) {
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 20),
-                              child: SearchResultCard(
-                                title: _searchResults[index]['title']!,
-                                duration: _searchResults[index]['duration']!,
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _searchResults.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'Search music to view video thumbnails',
+                                style: TextStyle(color: Colors.black45),
                               ),
-                            );
-                          },
-                        ),
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
+                              itemCount: _searchResults.length,
+                              itemBuilder: (context, index) {
+                                final item = _searchResults[index];
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: ThumbnailTrackTile(
+                                    result: item,
+                                    onTap: () {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Selected: ${item.title}'),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                );
+                              },
+                            ),
                 ),
               ],
             ),
@@ -143,128 +120,118 @@ class _SearchMusicScreenState extends State<SearchMusicScreen> {
       ),
 
       // Bottom Navigation Bar
-      bottomNavigationBar: Container(
-        color: const Color(0xFFE2E7F0),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: _onBottomNavTapped,
-          backgroundColor: const Color(0xFFE2E7F0),
-          elevation: 0,
-          selectedItemColor: primaryColor,
-          unselectedItemColor: Colors.black54,
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home_rounded),
-              label: 'Home',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.settings_outlined),
-              activeIcon: Icon(Icons.settings_rounded),
-              label: 'Settings',
-            ),
-          ],
-        ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: _onBottomNavTapped,
+        backgroundColor: const Color(0xFFE2E7F0),
+        indicatorColor: primaryColor.withOpacity(0.2),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home_rounded),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings_rounded),
+            label: 'Settings',
+          ),
+        ],
       ),
     );
   }
 }
 
-// Single Card Widget for Search Results
-class SearchResultCard extends StatelessWidget {
-  final String title;
-  final String duration;
+// Widget rendering only thumbnail & music audio information
+class ThumbnailTrackTile extends StatelessWidget {
+  final VideoSearchResult result;
+  final VoidCallback onTap;
 
-  const SearchResultCard({
+  const ThumbnailTrackTile({
     super.key,
-    required this.title,
-    required this.duration,
+    required this.result,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Gray Thumbnail Placeholder Container
-        AspectRatio(
-          aspectRatio: 16 / 9,
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFFD9D9D9),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Center(
-              child: Icon(
-                Icons.image_rounded,
-                size: 40,
-                color: Colors.black26,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
+    const cardBgColor = Color(0xFFE2E7F0);
 
-        // Title and Add-To-Queue Row
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Row(
+    return Material(
+      color: cardBgColor,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              // Cover Thumbnail
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: result.thumbnailUrl.isNotEmpty
+                    ? Image.network(
+                        result.thumbnailUrl,
+                        width: 70,
+                        height: 70,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            Container(
+                          width: 70,
+                          height: 70,
+                          color: Colors.black26,
+                          child: const Icon(Icons.music_note, color: Colors.white),
+                        ),
+                      )
+                    : Container(
+                        width: 70,
+                        height: 70,
+                        color: Colors.black26,
+                        child: const Icon(Icons.music_note, color: Colors.white),
+                      ),
+              ),
+              const SizedBox(width: 14),
+
+              // Title, Channel Name, & Duration Meta
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      duration,
+                      result.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${result.channelName.isNotEmpty ? result.channelName : 'Music'} ${result.duration.isNotEmpty ? '• ${result.duration}' : ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 11,
                         color: Colors.black54,
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    const Icon(
-                      Icons.visibility_off_outlined,
-                      size: 13,
-                      color: Colors.black54,
-                    ),
                   ],
                 ),
-              ],
-            ),
-            // Plus Button to add video to queue
-            InkWell(
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Added "$title" to queue'),
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
-              },
-              borderRadius: BorderRadius.circular(20),
-              child: const Padding(
-                padding: EdgeInsets.all(4.0),
-                child: Icon(
-                  Icons.add_circle_outline_rounded,
-                  size: 22,
-                  color: Colors.black87,
-                ),
               ),
-            ),
-          ],
+
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.play_arrow_rounded,
+                size: 24,
+                color: Colors.black54,
+              ),
+            ],
+          ),
         ),
-      ],
+      ),
     );
   }
 }
